@@ -9,17 +9,25 @@
 // docs/open-issues.md Open Issue #11.
 var ROOT_INTAKE_FOLDER_ID = '1PBf_pqjlkpplkQ0hmfm5bRzjW6f9UIa0';
 
-// Subfolder names. Failed-Extraction/ and Needs-Manual-Review/ are not in
-// spec §4's list but are required by spec §10's error-handling section —
-// see docs/open-issues.md Open Issue #9.
+// Subfolder names. The folders Daniel actively reviews are numbered to
+// read chronologically in Drive's alphabetical sort; Processed-Raw/,
+// Failed-Extraction/, and Needs-Manual-Review/ are backend/audit/error
+// folders he doesn't walk through in order, so they're left unnumbered.
+// (Failed-Extraction/ and Needs-Manual-Review/ aren't in spec §4's list but
+// are required by spec §10's error-handling section — see
+// docs/open-issues.md Open Issue #9.)
+//
+// These are matched by name only during setupFolders() (create-if-missing);
+// every other function resolves folders by their stored ID, so renaming
+// the actual Drive folders to match is safe and needs no re-run.
 var FOLDER_NAMES = {
-  INBOX: 'Inbox',
+  INBOX: '1- Inbox',
+  PENDING_REVIEW: '2- Pending-Review',
+  NEEDS_EDIT: '3- Needs-Edit',
+  APPROVED: '4- Approved',
+  REJECTED: '5- Rejected',
+  NOT_ACTIONABLE: '6- Not-Actionable',
   PROCESSED_RAW: 'Processed-Raw',
-  PENDING_REVIEW: 'Pending-Review',
-  NEEDS_EDIT: 'Needs-Edit',
-  APPROVED: 'Approved',
-  REJECTED: 'Rejected',
-  NOT_ACTIONABLE: 'Not-Actionable',
   FAILED_EXTRACTION: 'Failed-Extraction',
   NEEDS_MANUAL_REVIEW: 'Needs-Manual-Review'
 };
