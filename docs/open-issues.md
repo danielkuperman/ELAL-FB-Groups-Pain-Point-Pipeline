@@ -258,26 +258,33 @@ triaged.
   realistic mock) screenshots, including at least one deliberately messy
   one (blurry, non-English, multi-issue) to exercise the edge cases above.
 
-## 11. [RESOLVED] Drive root location for `FB-Intake/`
+## 11. [RESOLVED] Drive root location for the intake folder tree
 
-**Decision (Daniel, 2026-07-02):** the folder tree lives under Daniel's own
-Drive, at
-`https://drive.google.com/drive/u/0/folders/11Ik2P7yxe83BtP7ErKXsDx00QDjJDiKY`
-(folder ID `11Ik2P7yxe83BtP7ErKXsDx00QDjJDiKY`). `Setup.gs`'s
-`setupFolders()` creates `FB-Intake/` and its subfolders under this parent
-rather than at `My Drive` root or in a Shared Drive. See
-`docs/coding-plan.md` §1 (Setup.gs).
+**Decision (Daniel, 2026-07-02):** Daniel created the root folder himself:
+`https://drive.google.com/drive/u/0/folders/1PBf_pqjlkpplkQ0hmfm5bRzjW6f9UIa0`
+named **"FB-groups-intake"**. This folder **is** the pipeline root itself
+(not a parent to nest another folder under) — `setupFolders()` creates
+`Inbox/`, `Processed-Raw/`, `Pending-Review/`, `Needs-Edit/`, `Approved/`,
+`Rejected/`, `Not-Actionable/`, `Failed-Extraction/`, and
+`Needs-Manual-Review/` directly inside it. `ROOT_INTAKE_FOLDER_ID` in
+`Config.gs` is set to `1PBf_pqjlkpplkQ0hmfm5bRzjW6f9UIa0`.
 
-**Confirmed (2026-07-02):** the linked folder is the parent — a new
-`FB-Intake/` folder (with all its subfolders) gets created underneath it.
-Not yet created: this session has no Google Drive/Apps Script access (no
-connected Google MCP tool), so the folder doesn't exist yet. It will be
-created either by `setupFolders()` once `Setup.gs` is built and run under
-Daniel's own Google login, or manually by Daniel in Drive in the meantime
-— `setupFolders()` is idempotent either way (creates it if missing, reuses
-it if it already exists).
+## 12. [RESOLVED] Nothing in the pipeline determines "Source group"
 
-## 12. Lightly flagged, not blocking
+Found while implementing `SpecGen.gs`: §5's schema requires `Source group`
+(`Group A`/`Group B`), but neither the §6.1 vision prompt nor the §6.3
+reasoning prompt asks for or can reliably infer which of the two groups a
+screenshot came from — the redacted post/comment text has no group
+identifier in it, and asking Gemini to guess would be unreliable.
+
+**Fix implemented:** `Inbox/` is split into `Inbox/Group A/` and
+`Inbox/Group B/` subfolders (`Setup.gs`). Daniel drops each screenshot into
+the correct one; `Main.gs`'s `collectInboxQueue_()` reads the source group
+from which subfolder a file came from and passes it into
+`SpecGen.generateSpec()` as a trusted parameter — Gemini is no longer asked
+to produce `sourceGroup` at all.
+
+## 13. Lightly flagged, not blocking
 
 - Screenshotting private group content for internal product use likely sits
   fine within the group's/Meta's ToS for personal use, but wasn't asked

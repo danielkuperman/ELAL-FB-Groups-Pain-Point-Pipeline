@@ -11,6 +11,12 @@ spec says to mirror isn't available here) — see Open Issue #10. The plan below
 assumes standard Apps Script + clasp conventions until that project is
 provided.
 
+**Status: implemented in `src/*.gs` at the repo root**, following this plan
+and the resolved decisions in `docs/open-issues.md`. See the root
+`README.md` for deploy steps (clasp login, Script Properties, running
+`setupFolders()`/`setupTriggers()`) — none of which could be done from this
+session since it has no Google account access.
+
 ## 0. Project scaffold
 
 ```
@@ -28,6 +34,10 @@ provided.
 │   ├── Dedup.gs           # split out of SpecGen per §7 (see below)
 │   ├── Logger.gs           # not named in spec §10 but required by its own
 │   │                       #  error-handling section — see Open Issue #9
+│   ├── Util.gs             # shared helpers (Gemini calls, JSON parsing,
+│   │                       #  filename/date formatting, Drive move) — also
+│   │                       #  not in spec §10's list, added to avoid
+│   │                       #  duplicating this logic across every stage file
 │   ├── Main.gs
 │   └── Debug.gs
 ```
@@ -85,13 +95,17 @@ already needed for logging — see Logger.gs). This matters once the weekly
 trigger and a manual Debug run could overlap (Open Issue #7).
 
 **Setup.gs**
-- `setupFolders()` — idempotent: creates any missing folder under a root
-  `FB-Intake/` folder, writes resulting IDs to Script Properties, safe to
-  re-run. Root parent folder (Daniel's Drive, under which `FB-Intake/` and
-  its subfolders get created):
-  `https://drive.google.com/drive/u/0/folders/11Ik2P7yxe83BtP7ErKXsDx00QDjJDiKY`
-  (folder ID `11Ik2P7yxe83BtP7ErKXsDx00QDjJDiKY`) — hardcode this as
-  `ROOT_PARENT_FOLDER_ID` in `Config.gs`, resolved via
+- `setupFolders()` — idempotent: creates any missing subfolder directly
+  inside the root intake folder, writes resulting IDs to Script Properties,
+  safe to re-run. Also creates `Inbox/Group A/` and `Inbox/Group B/`
+  subfolders — see Open Issue #12: nothing in the extraction/reasoning
+  prompts can determine which of the two source groups a screenshot came
+  from, so it's inferred from which subfolder Daniel drops it into instead.
+  Root folder (Daniel's Drive, created by him, holds all
+  pipeline subfolders directly — see Open Issue #11 in `docs/open-issues.md`):
+  `https://drive.google.com/drive/u/0/folders/1PBf_pqjlkpplkQ0hmfm5bRzjW6f9UIa0`
+  (folder ID `1PBf_pqjlkpplkQ0hmfm5bRzjW6f9UIa0`, named "FB-groups-intake")
+  — hardcoded as `ROOT_INTAKE_FOLDER_ID` in `Config.gs`, resolved via
   `DriveApp.getFolderById(...)`.
 - `setupTriggers()` — installs the Monday time-based trigger for
   `runWeeklyBatch` and (if chunking is needed, see §6 below) any
@@ -151,7 +165,7 @@ non-English names, alternate FB URL formats) and 0 PII strings survive.
 ## 4. SpecGen.gs + Dedup.gs
 
 ```js
-function generateSpec(redactedObj, existingSpecsIndex) ->
+function generateSpec(redactedObj, existingSpecsIndex, sourceGroup) ->
   specObj | { actionable: false, reason }
 ```
 
