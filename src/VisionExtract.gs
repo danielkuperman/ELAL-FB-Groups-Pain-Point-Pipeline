@@ -32,8 +32,17 @@ var VISION_EXTRACTION_PROMPT =
 function extractFromScreenshot(fileId) {
   var file = DriveApp.getFileById(fileId);
   var blob = file.getBlob();
-  var base64 = Utilities.base64Encode(blob.getBytes());
   var mimeType = blob.getContentType();
+
+  if (mimeType.indexOf('image/') !== 0) {
+    // Most common cause: fileId points at a folder or a non-image file
+    // (e.g. a Google Doc), not a screenshot — a mis-copied ID. Fail here
+    // with a clear message instead of a cryptic Gemini 400.
+    throw new Error('VisionExtract: fileId ' + fileId + ' is not an image (got ' + mimeType +
+      '). Did you copy a folder ID instead of a screenshot file ID? Run debugListInboxFiles() to get correct IDs.');
+  }
+
+  var base64 = Utilities.base64Encode(blob.getBytes());
 
   var parts = [
     { text: VISION_EXTRACTION_PROMPT },
