@@ -6,6 +6,10 @@
  * (see docs/open-issues.md #5 — LLM JSON output drifts from schema).
  */
 
+function enumHint_(allowed) {
+  return 'one of: ' + allowed.join(' | ');
+}
+
 function buildSpecGenPrompt_(redactedObj, existingSpecsIndex) {
   var trimmedIndex = (existingSpecsIndex || []).slice(-DEDUP_CONFIG.MAX_INDEX_ENTRIES_IN_PROMPT);
   var indexText = trimmedIndex.length
@@ -16,21 +20,27 @@ function buildSpecGenPrompt_(redactedObj, existingSpecsIndex) {
   // from which Inbox/<Group> subfolder the screenshot came from (Main.gs
   // passes it in and SpecGen.generateSpec assigns it after parsing). See
   // docs/open-issues.md #12.
+  //
+  // Enum fields are written as "one of: A | B | C" description strings,
+  // not raw arrays — an earlier version embedded the allowed-values array
+  // directly as the field's example value, which Gemini sometimes copied
+  // literally (e.g. postType: ["Complaint","Question"]) instead of picking
+  // one. See docs/open-issues.md #5.
   var schemaText = JSON.stringify({
-    postType: ENUMS.POST_TYPE,
-    platform: ENUMS.PLATFORM,
-    journeyStage: ENUMS.JOURNEY_STAGE,
+    postType: enumHint_(ENUMS.POST_TYPE),
+    platform: enumHint_(ENUMS.PLATFORM),
+    journeyStage: enumHint_(ENUMS.JOURNEY_STAGE),
     painPointDescription: 'string, self-contained narrative',
-    severity: ENUMS.SEVERITY,
-    frequency: ENUMS.FREQUENCY,
+    severity: enumHint_(ENUMS.SEVERITY),
+    frequency: enumHint_(ENUMS.FREQUENCY),
     evidence: 'string, paraphrased/anonymized excerpts',
     shortTitle: 'string, <= 6 words, filename-safe',
     solutions: [{
       title: 'string',
       description: 'string',
-      category: ENUMS.SOLUTION_CATEGORY,
-      effort: ENUMS.EFFORT,
-      impact: ENUMS.IMPACT
+      category: enumHint_(ENUMS.SOLUTION_CATEGORY),
+      effort: enumHint_(ENUMS.EFFORT),
+      impact: enumHint_(ENUMS.IMPACT)
     }]
   }, null, 2);
 
@@ -38,6 +48,8 @@ function buildSpecGenPrompt_(redactedObj, existingSpecsIndex) {
     'private airline customer Facebook group. Produce a structured product spec in JSON matching\n' +
     'this exact schema:\n' + schemaText + '\n\n' +
     'Rules:\n' +
+    '- Every field described as "one of: ..." must be filled with exactly one of those strings —\n' +
+    '  never an array, never multiple values, never a value outside that list.\n' +
     '- Write the pain point description as a self-contained narrative — assume the reader never\n' +
     '  saw the original post.\n' +
     '- Severity: High = blocks a core task (booking, check-in, boarding) or causes financial harm.\n' +
@@ -66,30 +78,57 @@ function buildSpecGenPrompt_(redactedObj, existingSpecsIndex) {
  */
 function generateSpec(redactedObj, existingSpecsIndex, sourceGroup) {
   var prompt = buildSpecGenPrompt_(redactedObj, existingSpecsIndex);
-  var text = callGemini_([{ text: prompt }]);
-  var parsed = tryParseJson_(text);
 
+  var parsed = attemptGenerateSpec_(prompt);
   if (!parsed) {
-    var retryText = callGemini_([{ text: prompt + '\n\nYour previous response was not valid JSON. Return valid JSON only.' }]);
-    parsed = tryParseJson_(retryText);
+    // Single retry per spec §10, covering *any* failure (non-JSON output
+    // or JSON that fails schema validation) — not just parse failures.
+    var retryPrompt = prompt + '\n\nYour previous response was invalid: either not valid JSON, ' +
+      'or an enum field held an array/invalid value instead of a single allowed string. ' +
+      'Return valid JSON only, strictly matching the schema.';
+    parsed = attemptGenerateSpec_(retryPrompt);
   }
 
   if (!parsed) {
-    throw new Error('SpecGen: Gemini returned non-JSON output after retry');
+    throw new Error('SpecGen: Gemini returned invalid output after retry');
   }
 
   if (parsed.actionable === false) {
-    if (!parsed.reason || typeof parsed.reason !== 'string') {
-      throw new Error('SpecGen: actionable:false response missing reason');
-    }
     return parsed;
   }
 
-  validateSpecShape_(parsed);
+  // attemptGenerateSpec_ already ran validateSpecShape_ (which normalizes
+  // enum casing in place), so parsed is known-valid here.
   parsed.sourceGroup = requireEnum_(sourceGroup, ENUMS.SOURCE_GROUP, 'sourceGroup');
   parsed.specId = getNextSpecId();
   parsed.painPointApproval = 'Pending';
   parsed.solutions.forEach(function (s) { s.approval = 'Pending'; });
+  return parsed;
+}
+
+// Returns a validated spec object (or a valid {actionable:false, reason}),
+// or null on any failure — non-JSON output, or JSON that fails schema
+// validation. Callers retry once on null before giving up.
+function attemptGenerateSpec_(prompt) {
+  var text;
+  try {
+    text = callGemini_([{ text: prompt }]);
+  } catch (e) {
+    return null;
+  }
+
+  var parsed = tryParseJson_(text);
+  if (!parsed) return null;
+
+  if (parsed.actionable === false) {
+    return (parsed.reason && typeof parsed.reason === 'string') ? parsed : null;
+  }
+
+  try {
+    validateSpecShape_(parsed);
+  } catch (e) {
+    return null;
+  }
   return parsed;
 }
 
@@ -126,7 +165,10 @@ function requireEnum_(value, allowed, fieldName) {
 
 // Case-insensitive match against an allow-list, normalized to the
 // canonical casing (guards against e.g. "feature request" vs "Feature Request").
+// Also tolerates Gemini occasionally returning an array instead of a single
+// value (see docs/open-issues.md #5) by matching against its first element.
 function normalizeEnum_(value, allowed) {
+  if (Array.isArray(value)) value = value[0];
   if (typeof value !== 'string') return null;
   for (var i = 0; i < allowed.length; i++) {
     if (allowed[i].toLowerCase() === value.toLowerCase()) return allowed[i];
