@@ -46,7 +46,15 @@ from Drive once its redacted transcript and spec doc are both filed. See
 
 </details>
 
-## 2. [DECISION NEEDED] Partial-approval routing (flagged by the spec itself)
+## 2. [RESOLVED] Partial-approval routing (flagged by the spec itself)
+
+**Decision (Daniel, 2026-07-02):** locked in the recommended policy below —
+route on the pain point's status alone; solution statuses travel with the
+doc and don't gate the folder move.
+
+<details>
+<summary>Original analysis</summary>
+
 
 §10 explicitly says: "moves files to the correct folder based on combined
 pain-point + solutions status (e.g. all approved → `Approved/`; ... consider
@@ -75,6 +83,8 @@ anything else including any Pending solution→stays in
 the doc into backlog intake as-is and don't gate the folder move. This
 avoids specs sitting in limbo forever waiting for every last solution to be
 triaged.
+
+</details>
 
 ## 3. Vision extraction edge cases
 
@@ -258,11 +268,14 @@ Drive, at
 rather than at `My Drive` root or in a Shared Drive. See
 `docs/coding-plan.md` §1 (Setup.gs).
 
-Assumption to confirm: this ID is the *parent* folder under which
-`FB-Intake/` itself gets created (not `FB-Intake/` already existing at that
-ID) — if that folder is meant to already **be** `FB-Intake/`, say so and
-`Setup.gs` will resolve subfolders directly under it instead of nesting
-another `FB-Intake/` level.
+**Confirmed (2026-07-02):** the linked folder is the parent — a new
+`FB-Intake/` folder (with all its subfolders) gets created underneath it.
+Not yet created: this session has no Google Drive/Apps Script access (no
+connected Google MCP tool), so the folder doesn't exist yet. It will be
+created either by `setupFolders()` once `Setup.gs` is built and run under
+Daniel's own Google login, or manually by Daniel in Drive in the meantime
+— `setupFolders()` is idempotent either way (creates it if missing, reuses
+it if it already exists).
 
 ## 12. Lightly flagged, not blocking
 

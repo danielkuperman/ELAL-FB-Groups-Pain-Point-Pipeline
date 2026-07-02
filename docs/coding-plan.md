@@ -36,6 +36,33 @@ Required OAuth scopes: `drive`, `documents`, `script.external_request`
 (Gemini calls), `script.scriptapp` (triggers). Gemini API key stored in
 `PropertiesService.getScriptProperties()`, never hardcoded in `Config.gs`.
 
+## Credentials & access needed from Daniel
+
+Nothing gets typed into this chat — no passwords, and no API keys pasted
+as text either (chat history isn't a safe place for secrets). What's
+actually needed, and how each gets handled:
+
+- **Drive/Docs/Sheets access:** none to hand over. The Apps Script project
+  runs *as Daniel's own Google account* once he authorizes it (a one-time
+  OAuth consent click when the script first runs, same as any Apps Script
+  project) — no separate credential exists for this.
+- **`clasp` login (to push code from this repo into the Apps Script
+  project):** also OAuth, done interactively in a browser on Daniel's
+  machine via `clasp login`. This session has no Google MCP connection, so
+  I can't run that step myself — Daniel (or whoever deploys) runs it
+  locally once the code is ready.
+- **Gemini API key:** Daniel generates this himself (Google AI Studio or
+  Google Cloud Console → Vertex AI/Gemini API), then pastes it directly into
+  the Apps Script project's **Script Properties** (Project Settings → Script
+  Properties in the Apps Script editor) under a key like `GEMINI_API_KEY` —
+  never into `Config.gs` source or into this chat. `Config.gs` only ever
+  reads it via `PropertiesService.getScriptProperties().getProperty(...)`.
+- **The `FB-Intake/` Drive folder** (Open Issue #11 in `docs/open-issues.md`)
+  isn't created yet — this session has no Drive access to create it. Either
+  Daniel creates it manually under the linked parent folder now, or it gets
+  created automatically the first time `setupFolders()` runs (idempotent
+  either way).
+
 ## 1. Config.gs + Setup.gs
 
 **Config.gs**
@@ -192,15 +219,17 @@ function parseDocStatuses(docId) -> {painPoint: status, solutions: [status,...]}
 function resolveTargetFolder(statuses) -> folderKey
 ```
 
-- **Blocked on a decision the spec itself flags as unresolved:** what
-  folder does a doc land in when pain point is Approved but only some
-  solutions are Approved (others Pending/Rejected)? The spec's own §10 text
-  says "consider whether partial approval needs a note — flag this as a
-  design question back to Daniel if ambiguous." This *is* ambiguous — see
-  Open Issue #2. Do not finalize `resolveTargetFolder`'s logic until that's
-  answered; build the parsing/reading half first (independent of the
-  routing decision) and stub routing behind a single function so the
-  decision only touches one place.
+- **Routing policy (Open Issue #2, resolved):** `resolveTargetFolder` keys
+  off the **pain point's** status only —
+  `Approved` → `Approved/`, `Rejected` → `Rejected/`, anything else
+  (including `Pending`) → stays in `Pending-Review/`/`Needs-Edit/`.
+  Individual solution statuses are **not** a routing input — they travel
+  with the doc into backlog intake as-is (an Approved pain point can carry
+  a mix of Approved/Rejected/Pending solutions; backlog intake filters on
+  each solution's own status later, not on the doc's folder).
+  A Rejected pain point with any Approved solution is an inconsistent state
+  worth flagging (log + leave in place) rather than silently filing to
+  `Rejected/`.
 - Malformed or missing status tags (typo'd status word, tag deleted by
   accident): doc is left in place, logged to `Logger.gs`, not silently
   mis-routed.
@@ -208,10 +237,9 @@ function resolveTargetFolder(statuses) -> folderKey
   a no-op, not an error (a doc that's already in `Approved/` with all-approved
   tags shouldn't be treated as needing another move each run).
 
-**Done when:** unit-style tests via `Debug.gs` cover: all-approved →
-Approved/, any-rejected pain point → Rejected/, mixed solution statuses
-(routing per whatever policy gets decided) → correct folder, malformed tag
-→ left in place + logged.
+**Done when:** unit-style tests via `Debug.gs` cover: pain point Approved
+(any solution mix) → `Approved/`, pain point Rejected → `Rejected/`, pain
+point Pending → stays put, malformed tag → left in place + logged.
 
 ## 7. Main.gs
 
@@ -273,16 +301,17 @@ message — log field names/lengths/booleans, not content).
 
 Matches the spec's own recommended order (§10), with two insertions:
 
-1. Config.gs + Setup.gs
-2. **Resolve Open Issue #2 with Daniel** (partial-approval routing) — still
-   blocks `StatusSync.gs`'s routing logic. (Open Issue #1 — Processed-Raw
-   contents — and the Drive root folder location are now resolved; see
-   `docs/open-issues.md`.)
-3. VisionExtract.gs — test on 2–3 real sample screenshots
-4. Redact.gs — test on VisionExtract output
-5. SpecGen.gs + Dedup.gs — test on redacted sample text
-6. DocBuilder.gs — confirm status tags are unambiguous to parse
-7. StatusSync.gs — build/test read-back + move logic (routing policy now
-   resolvable per step 2)
-8. Main.gs — wire together with chunked/continuation-safe batch loop
-9. Add the Monday time trigger last, as the spec specifies
+All open design decisions blocking the build (Processed-Raw contents,
+partial-approval routing, Drive root folder) are now resolved — see
+`docs/open-issues.md`. Remaining order matches the spec's own
+recommendation (§10):
+
+1. Config.gs + Setup.gs — including creating `FB-Intake/` under the
+   agreed Drive root
+2. VisionExtract.gs — test on 2–3 real sample screenshots
+3. Redact.gs — test on VisionExtract output
+4. SpecGen.gs + Dedup.gs — test on redacted sample text
+5. DocBuilder.gs — confirm status tags are unambiguous to parse
+6. StatusSync.gs — build/test read-back + move logic
+7. Main.gs — wire together with chunked/continuation-safe batch loop
+8. Add the Monday time trigger last, as the spec specifies
