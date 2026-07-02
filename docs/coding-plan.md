@@ -60,7 +60,12 @@ trigger and a manual Debug run could overlap (Open Issue #7).
 **Setup.gs**
 - `setupFolders()` — idempotent: creates any missing folder under a root
   `FB-Intake/` folder, writes resulting IDs to Script Properties, safe to
-  re-run.
+  re-run. Root parent folder (Daniel's Drive, under which `FB-Intake/` and
+  its subfolders get created):
+  `https://drive.google.com/drive/u/0/folders/11Ik2P7yxe83BtP7ErKXsDx00QDjJDiKY`
+  (folder ID `11Ik2P7yxe83BtP7ErKXsDx00QDjJDiKY`) — hardcode this as
+  `ROOT_PARENT_FOLDER_ID` in `Config.gs`, resolved via
+  `DriveApp.getFolderById(...)`.
 - `setupTriggers()` — installs the Monday time-based trigger for
   `runWeeklyBatch` and (if chunking is needed, see §6 below) any
   continuation trigger.
@@ -236,8 +241,13 @@ function processOneFile(fileId) // extract → redact → generate → dedup →
   state to detect and retry (doc exists, screenshot lingering in Inbox) —
   make `processOneFile` tolerant of "doc already filed for this source" so
   a retry doesn't create a duplicate doc.
-- Resolves the `Processed-Raw/` contradiction from Open Issue #1 before
-  this function is finalized — what exactly gets archived there.
+- `Processed-Raw/` contradiction (Open Issue #1) is resolved: it stores the
+  **redacted transcript only**. `processOneFile` writes the redacted JSON/
+  text object there (e.g. as a small Doc or JSON blob) and **deletes** the
+  original screenshot from Drive (`file.setTrashed(true)` or hard delete)
+  once that transcript + the spec doc are both filed successfully — the
+  raw image with PII in its pixels does not persist anywhere past
+  extraction.
 
 **Done when:** a run over a small batch (including one intentionally
 malformed screenshot) produces the correct docs in the correct folders,
@@ -264,8 +274,10 @@ message — log field names/lengths/booleans, not content).
 Matches the spec's own recommended order (§10), with two insertions:
 
 1. Config.gs + Setup.gs
-2. **Resolve Open Issues #1 and #2 with Daniel** — both block downstream
-   design decisions (what Processed-Raw contains; partial-approval routing)
+2. **Resolve Open Issue #2 with Daniel** (partial-approval routing) — still
+   blocks `StatusSync.gs`'s routing logic. (Open Issue #1 — Processed-Raw
+   contents — and the Drive root folder location are now resolved; see
+   `docs/open-issues.md`.)
 3. VisionExtract.gs — test on 2–3 real sample screenshots
 4. Redact.gs — test on VisionExtract output
 5. SpecGen.gs + Dedup.gs — test on redacted sample text

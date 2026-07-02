@@ -5,7 +5,17 @@ Ranked roughly by how much they block correct/safe behavior. Items marked
 the rest are edge cases to design/handle in code, listed so nothing gets
 discovered mid-build.
 
-## 1. [DECISION NEEDED] `Processed-Raw/` contradicts the PII guarantee
+## 1. [RESOLVED] `Processed-Raw/` contradicts the PII guarantee
+
+**Decision (Daniel, 2026-07-02):** store the redacted transcript and delete
+the raw screenshot after successful extraction — i.e. option (a) below.
+`Processed-Raw/` never holds a raw image; the source screenshot is deleted
+from Drive once its redacted transcript and spec doc are both filed. See
+`docs/coding-plan.md` §7 (Main.gs).
+
+<details>
+<summary>Original analysis</summary>
+
 
 - §4 describes `Processed-Raw/` as holding **"redacted text only"**.
 - §10's `Main.gs` description says to **"archive raw screenshot to
@@ -33,6 +43,8 @@ discovered mid-build.
 - Recommend (a): it's what §4 already says, it satisfies §2 without caveats,
   and Daniel manually holds the original screenshots on his device/upload
   source anyway if a true original is ever needed.
+
+</details>
 
 ## 2. [DECISION NEEDED] Partial-approval routing (flagged by the spec itself)
 
@@ -236,7 +248,23 @@ triaged.
   realistic mock) screenshots, including at least one deliberately messy
   one (blurry, non-English, multi-issue) to exercise the edge cases above.
 
-## 11. Lightly flagged, not blocking
+## 11. [RESOLVED] Drive root location for `FB-Intake/`
+
+**Decision (Daniel, 2026-07-02):** the folder tree lives under Daniel's own
+Drive, at
+`https://drive.google.com/drive/u/0/folders/11Ik2P7yxe83BtP7ErKXsDx00QDjJDiKY`
+(folder ID `11Ik2P7yxe83BtP7ErKXsDx00QDjJDiKY`). `Setup.gs`'s
+`setupFolders()` creates `FB-Intake/` and its subfolders under this parent
+rather than at `My Drive` root or in a Shared Drive. See
+`docs/coding-plan.md` §1 (Setup.gs).
+
+Assumption to confirm: this ID is the *parent* folder under which
+`FB-Intake/` itself gets created (not `FB-Intake/` already existing at that
+ID) — if that folder is meant to already **be** `FB-Intake/`, say so and
+`Setup.gs` will resolve subfolders directly under it instead of nesting
+another `FB-Intake/` level.
+
+## 12. Lightly flagged, not blocking
 
 - Screenshotting private group content for internal product use likely sits
   fine within the group's/Meta's ToS for personal use, but wasn't asked
