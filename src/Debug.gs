@@ -5,6 +5,29 @@
  * build order.
  */
 
+// Logs "<group> | <filename> | <fileId>" for every file currently in
+// Inbox/Group A and Inbox/Group B. Run this first and copy the ID from the
+// log instead of hand-extracting it from a Drive URL — a mis-copied ID is
+// the most common cause of "Invalid argument: id" from getFileById.
+function debugListInboxFiles() {
+  ENUMS.SOURCE_GROUP.forEach(function (groupLabel) {
+    var files = getInboxGroupFolder(groupLabel).getFiles();
+    while (files.hasNext()) {
+      var f = files.next();
+      Logger.log(groupLabel + ' | ' + f.getName() + ' | ' + f.getId());
+    }
+  });
+}
+
+// Scratch runner for the editor's Run button, which can't pass arguments:
+// edit these two constants, then select debugScratchRun and click Run.
+var DEBUG_SCRATCH_FILE_ID = 'PASTE_FILE_ID_HERE';
+var DEBUG_SCRATCH_GROUP = 'Group A';
+
+function debugScratchRun() {
+  return debugFullPipelineOne(DEBUG_SCRATCH_FILE_ID, DEBUG_SCRATCH_GROUP);
+}
+
 function debugExtractOne(fileId) {
   var result = extractFromScreenshot(fileId);
   Logger.log(JSON.stringify(result, null, 2));
