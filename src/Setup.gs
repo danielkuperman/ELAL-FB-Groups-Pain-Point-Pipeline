@@ -1,7 +1,8 @@
 /**
  * Setup.gs — one-time (idempotent) folder + trigger setup. Run
  * setupFolders() once after deploying, then setupTriggers() to install the
- * Monday batch trigger.
+ * Monday batch trigger and the daily status-sync trigger — without both,
+ * "automatic" only covers filing new specs, not moving reviewed ones.
  */
 
 function setupFolders() {
@@ -34,20 +35,34 @@ function getOrCreateChildFolder_(parent, name) {
 }
 
 /**
- * Installs the weekly Monday trigger for runWeeklyBatch. Safe to re-run —
- * removes any existing runWeeklyBatch trigger first so this never creates
- * duplicates.
+ * Installs both recurring triggers. Safe to re-run — removes any existing
+ * triggers for these two handlers first so this never creates duplicates.
+ *
+ * - runWeeklyBatch: Mondays, ingests Inbox/ screenshots into specs.
+ * - syncStatuses: daily, moves docs to Approved/Rejected once you've
+ *   edited their [STATUS: ...] tags — without this, syncing only happens
+ *   when someone remembers to run it manually.
  */
 function setupTriggers() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'runWeeklyBatch') {
-      ScriptApp.deleteTrigger(t);
-    }
+  ['runWeeklyBatch', 'syncStatuses'].forEach(function (handler) {
+    ScriptApp.getProjectTriggers().forEach(function (t) {
+      if (t.getHandlerFunction() === handler) {
+        ScriptApp.deleteTrigger(t);
+      }
+    });
   });
+
   ScriptApp.newTrigger('runWeeklyBatch')
     .timeBased()
     .onWeekDay(ScriptApp.WeekDay.MONDAY)
     .atHour(6)
     .create();
-  Logger.log('Weekly trigger installed (Mondays, ~6am script timezone).');
+
+  ScriptApp.newTrigger('syncStatuses')
+    .timeBased()
+    .everyDays(1)
+    .atHour(8)
+    .create();
+
+  Logger.log('Triggers installed: runWeeklyBatch (Mondays ~6am), syncStatuses (daily ~8am), script timezone.');
 }

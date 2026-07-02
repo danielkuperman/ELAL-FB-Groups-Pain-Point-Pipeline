@@ -51,18 +51,20 @@ interactive Google OAuth login as Daniel. All commands below run locally.
    `debugRedactOne(fileId)`, `debugSpecGenOne(fileId, 'Group A')`, then
    `debugFullPipelineOne(fileId, 'Group A')` (does not delete the source
    screenshot, unlike the real batch).
-8. **Run `setupTriggers()`** once to install the Monday weekly trigger for
-   `runWeeklyBatch`.
+8. **Run `setupTriggers()`** once to install both recurring triggers:
+   `runWeeklyBatch` (Mondays) and `syncStatuses` (daily) — this is what
+   makes the whole thing run without you touching the Apps Script editor
+   again.
 
 ## Weekly usage
 
 Drop screenshots into `Inbox/Group A/` or `Inbox/Group B/` (whichever group
 the post is from) any time during the week. The Monday trigger runs
 `runWeeklyBatch()`, which files specs into `Pending-Review/` or
-`Not-Actionable/`. After reviewing, edit each doc's `[STATUS: Pending]`
-tags to `Approved`/`Rejected`/keep `Pending`, then run `syncStatuses()`
-(manually, or wire up your own trigger) to move docs into `Approved/` or
-`Rejected/`.
+`Not-Actionable/`. Review them and edit each doc's `[STATUS: Pending]`
+tags to `Approved`/`Rejected` (or leave as `Pending`) — the daily
+`syncStatuses` trigger picks up the change and moves the doc into
+`Approved/` or `Rejected/` automatically, no manual run needed.
 
 ## Known gaps
 
